@@ -1,0 +1,16 @@
+{
+  "name": "all-ai-chat",
+  "version": "1.0.0",
+  "description": "Send text to multiple AI chat windows simultaneously",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "keywords": ["ai", "chat", "multi-chat", "electron"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}
