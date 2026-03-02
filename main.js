@@ -66,3 +66,14 @@ ipcMain.handle('send-text', async (event, { text, windowIds }) => {
     return { success: false, error: err.message };
   }
 });
+
+// Bulk rate chat responses in selected windows
+ipcMain.handle('rate-chat', async (event, { ratingType, windowIds }) => {
+  try {
+    const results = await windowManager.rateChatInWindows(ratingType, windowIds, mainWindow);
+    return { success: true, results };
+  } catch (err) {
+    console.error('Failed to rate chat:', err);
+    return { success: false, error: err.message };
+  }
+});

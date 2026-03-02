@@ -233,6 +233,96 @@ body {
   border: 1px solid rgba(139, 92, 246, 0.3);
 }
 
+/* ── Rating Panel ── */
+#rating-panel {
+  flex-shrink: 0;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+}
+
+#rating-panel .panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+#rating-panel .panel-header h2 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+#rating-status {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+#rating-status.success {
+  color: var(--success);
+}
+
+#rating-status.error {
+  color: var(--error);
+}
+
+#rating-status.sending {
+  color: var(--accent);
+}
+
+#rating-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+#rating-buttons button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+#btn-thumbs-up {
+  background: rgba(46, 204, 113, 0.1);
+  color: var(--success);
+  border-color: rgba(46, 204, 113, 0.3);
+}
+
+#btn-thumbs-up:hover:not(:disabled) {
+  background: rgba(46, 204, 113, 0.2);
+  border-color: var(--success);
+}
+
+#btn-thumbs-down {
+  background: rgba(231, 76, 60, 0.1);
+  color: var(--error);
+  border-color: rgba(231, 76, 60, 0.3);
+}
+
+#btn-thumbs-down:hover:not(:disabled) {
+  background: rgba(231, 76, 60, 0.2);
+  border-color: var(--error);
+}
+
+#rating-buttons button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#rating-buttons button svg {
+  flex-shrink: 0;
+}
+
 /* ── Input Panel ── */
 #input-panel {
   flex-shrink: 0;

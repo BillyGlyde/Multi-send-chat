@@ -1,5 +1,6 @@
 const { exec } = require('child_process');
 const { clipboard } = require('electron');
+const { generateRatingScript } = require('./rating-scripts');
 
 function execAsync(cmd) {
   return new Promise((resolve, reject) => {
@@ -84,6 +85,78 @@ async function sendTextToWindowsLinux(text, windowIds, mainWindow) {
   }
 
   // Restore original clipboard after a short delay
+  setTimeout(() => {
+    clipboard.writeText(originalClipboard);
+  }, 500);
+
+  return results;
+}
+
+// ── Linux bulk rating via console injection ──
+
+async function rateChatInWindowsLinux(ratingType, windowIds, mainWindow) {
+  const originalClipboard = clipboard.readText();
+
+  let ourWindowId;
+  try {
+    ourWindowId = await execAsync('xdotool getactivewindow');
+  } catch (e) {
+    // fallback: don't restore focus
+  }
+
+  const script = generateRatingScript(ratingType);
+  const results = [];
+
+  for (const wid of windowIds) {
+    try {
+      const decId = parseInt(wid, 16);
+
+      // Activate the target browser window
+      await execAsync(`xdotool windowactivate --sync ${decId}`);
+      await sleep(300);
+
+      // Open Chrome DevTools Console (Ctrl+Shift+J)
+      await execAsync(`xdotool key --clearmodifiers ctrl+shift+j`);
+      await sleep(800);
+
+      // Type "allow pasting" to bypass Chrome's paste protection
+      await execAsync(`xdotool type --clearmodifiers "allow pasting"`);
+      await sleep(100);
+      await execAsync(`xdotool key --clearmodifiers Return`);
+      await sleep(300);
+
+      // Copy rating script to clipboard and paste into console
+      clipboard.writeText(script);
+      await sleep(100);
+      await execAsync(`xdotool key --clearmodifiers ctrl+v`);
+      await sleep(200);
+
+      // Execute the script
+      await execAsync(`xdotool key --clearmodifiers Return`);
+
+      // Wait for script to start executing in the page context
+      await sleep(1500);
+
+      // Close the DevTools Console
+      await execAsync(`xdotool key --clearmodifiers ctrl+shift+j`);
+      await sleep(200);
+
+      results.push({ windowId: wid, success: true });
+    } catch (err) {
+      results.push({ windowId: wid, success: false, error: err.message });
+    }
+  }
+
+  // Restore focus to our window
+  if (ourWindowId) {
+    try {
+      await execAsync(`xdotool windowactivate --sync ${ourWindowId}`);
+    } catch (e) {
+      // Best effort
+    }
+  }
+
+  // Restore original clipboard
   setTimeout(() => {
     clipboard.writeText(originalClipboard);
   }, 500);
@@ -232,6 +305,108 @@ async function sendTextToWindowsWin(text, windowIds, mainWindow) {
   return results;
 }
 
+// ── macOS bulk rating via console injection ──
+
+async function rateChatInWindowsMac(ratingType, windowIds, mainWindow) {
+  const originalClipboard = clipboard.readText();
+  const script = generateRatingScript(ratingType);
+  const results = [];
+
+  for (const wid of windowIds) {
+    try {
+      // Activate window, open console, inject script
+      await execAsync(`osascript -e 'tell application "System Events" to keystroke "j" using {command down, shift down}'`);
+      await sleep(800);
+
+      // Type "allow pasting" for paste protection
+      await execAsync(`osascript -e 'tell application "System Events" to keystroke "allow pasting"'`);
+      await sleep(100);
+      await execAsync(`osascript -e 'tell application "System Events" to key code 36'`);
+      await sleep(300);
+
+      // Paste the script
+      clipboard.writeText(script);
+      await sleep(100);
+      await execAsync(`osascript -e 'tell application "System Events" to keystroke "v" using command down'`);
+      await sleep(200);
+
+      // Execute
+      await execAsync(`osascript -e 'tell application "System Events" to key code 36'`);
+      await sleep(1500);
+
+      // Close console
+      await execAsync(`osascript -e 'tell application "System Events" to keystroke "j" using {command down, shift down}'`);
+      await sleep(200);
+
+      results.push({ windowId: wid, success: true });
+    } catch (err) {
+      results.push({ windowId: wid, success: false, error: err.message });
+    }
+  }
+
+  setTimeout(() => clipboard.writeText(originalClipboard), 500);
+  return results;
+}
+
+// ── Windows bulk rating via console injection ──
+
+async function rateChatInWindowsWin(ratingType, windowIds, mainWindow) {
+  const originalClipboard = clipboard.readText();
+  const script = generateRatingScript(ratingType);
+  const results = [];
+
+  for (const wid of windowIds) {
+    try {
+      // Activate window
+      const psActivate = `
+        Add-Type @"
+        using System;
+        using System.Runtime.InteropServices;
+        public class WinActivate {
+          [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+        }
+"@
+        [WinActivate]::SetForegroundWindow([IntPtr]${wid})
+      `;
+      await execAsync(`powershell -NoProfile -Command "${psActivate.replace(/"/g, '\\"')}"`);
+      await sleep(300);
+
+      // Open DevTools Console (Ctrl+Shift+J)
+      await execAsync(
+        `powershell -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^+j')"`,
+      );
+      await sleep(800);
+
+      // Type "allow pasting"
+      await execAsync(
+        `powershell -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('allow pasting{ENTER}')"`,
+      );
+      await sleep(300);
+
+      // Paste script
+      clipboard.writeText(script);
+      await sleep(100);
+      await execAsync(
+        `powershell -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^v'); Start-Sleep -Milliseconds 200; [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')"`,
+      );
+      await sleep(1500);
+
+      // Close console
+      await execAsync(
+        `powershell -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^+j')"`,
+      );
+      await sleep(200);
+
+      results.push({ windowId: wid, success: true });
+    } catch (err) {
+      results.push({ windowId: wid, success: false, error: err.message });
+    }
+  }
+
+  setTimeout(() => clipboard.writeText(originalClipboard), 500);
+  return results;
+}
+
 // ── Platform dispatch ──
 
 async function getWindows() {
@@ -260,4 +435,17 @@ async function sendTextToWindows(text, windowIds, mainWindow) {
   }
 }
 
-module.exports = { getWindows, sendTextToWindows };
+async function rateChatInWindows(ratingType, windowIds, mainWindow) {
+  switch (process.platform) {
+    case 'linux':
+      return rateChatInWindowsLinux(ratingType, windowIds, mainWindow);
+    case 'darwin':
+      return rateChatInWindowsMac(ratingType, windowIds, mainWindow);
+    case 'win32':
+      return rateChatInWindowsWin(ratingType, windowIds, mainWindow);
+    default:
+      throw new Error(`Unsupported platform: ${process.platform}`);
+  }
+}
+
+module.exports = { getWindows, sendTextToWindows, rateChatInWindows };

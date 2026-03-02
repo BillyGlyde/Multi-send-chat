@@ -11,6 +11,9 @@ const btnSelectAll = document.getElementById('btn-select-all');
 const btnDeselectAll = document.getElementById('btn-deselect-all');
 const selectedCount = document.getElementById('selected-count');
 const sendStatus = document.getElementById('send-status');
+const btnThumbsUp = document.getElementById('btn-thumbs-up');
+const btnThumbsDown = document.getElementById('btn-thumbs-down');
+const ratingStatus = document.getElementById('rating-status');
 
 // ── Chat service detection ──
 
@@ -77,6 +80,8 @@ function updateSelectedCount() {
   const count = selectedWindowIds.size;
   selectedCount.textContent = `${count} window${count !== 1 ? 's' : ''} selected`;
   btnSend.disabled = count === 0;
+  btnThumbsUp.disabled = count === 0;
+  btnThumbsDown.disabled = count === 0;
 }
 
 function toggleWindow(id) {
@@ -156,7 +161,50 @@ async function sendText() {
   }
 }
 
+async function rateChat(ratingType) {
+  if (selectedWindowIds.size === 0) return;
+
+  const label = ratingType === 'up' ? 'thumbs up' : 'thumbs down';
+  btnThumbsUp.disabled = true;
+  btnThumbsDown.disabled = true;
+  ratingStatus.textContent = `Rating ${label}...`;
+  ratingStatus.className = 'sending';
+
+  try {
+    const result = await window.api.rateChat(ratingType, [...selectedWindowIds]);
+
+    if (result.success) {
+      const successCount = result.results.filter((r) => r.success).length;
+      const failCount = result.results.filter((r) => !r.success).length;
+
+      if (failCount === 0) {
+        ratingStatus.textContent = `✓ Rated ${label} in ${successCount} window${successCount !== 1 ? 's' : ''}`;
+        ratingStatus.className = 'success';
+      } else {
+        ratingStatus.textContent = `Done: ${successCount}, Failed: ${failCount}`;
+        ratingStatus.className = 'error';
+      }
+    } else {
+      ratingStatus.textContent = `Error: ${result.error}`;
+      ratingStatus.className = 'error';
+    }
+  } catch (err) {
+    ratingStatus.textContent = `Error: ${err.message}`;
+    ratingStatus.className = 'error';
+  } finally {
+    btnThumbsUp.disabled = selectedWindowIds.size === 0;
+    btnThumbsDown.disabled = selectedWindowIds.size === 0;
+    setTimeout(() => {
+      ratingStatus.textContent = '';
+      ratingStatus.className = '';
+    }, 4000);
+  }
+}
+
 // ── Event Listeners ──
+
+btnThumbsUp.addEventListener('click', () => rateChat('up'));
+btnThumbsDown.addEventListener('click', () => rateChat('down'));
 
 btnRefresh.addEventListener('click', refreshWindows);
 
