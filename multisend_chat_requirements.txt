@@ -1,0 +1,53 @@
+
+MultiSend Chat - Required Programs and Tools
+===========================================
+
+Operating System
+----------------
+Linux Mint (X11)
+
+Required System Programs
+------------------------
+wmctrl
+xdotool
+xclip
+python3
+python3-tk
+
+Python Modules
+--------------
+pynput
+
+Installation Commands (Linux Mint / Ubuntu)
+--------------------------------------------
+sudo apt update
+sudo apt install wmctrl xdotool xclip python3 python3-tk python3-pynput
+
+Project Directory
+-----------------
+/home/sb/Thumbs_Up
+
+Project Files
+-------------
+multisend_cli.py
+multisend_core.py
+multisend_gui.py
+
+Launcher
+--------
+/home/sb/.local/share/applications/multisend-gui.desktop
+
+Launcher Command
+----------------
+python3 /home/sb/Thumbs_Up/multisend_gui.py
+
+Purpose
+-------
+MultiSend Chat is a Tkinter-based desktop automation tool that:
+- Detects windows using wmctrl
+- Activates windows using xdotool
+- Sends typed messages to multiple windows
+- Supports ChatGPT, Claude, Perplexity, terminals, and text editors
+- Uses clipboard probing for Perplexity input focus
+- Allows global cancel using Escape via pynput
+- Scrollable window list via Tkinter canvas
