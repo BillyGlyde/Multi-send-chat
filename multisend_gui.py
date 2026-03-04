@@ -23,6 +23,7 @@ class MultiSendGUI(tk.Tk):
         self.status_var = tk.StringVar(value="Ready.")
         self.window_vars: dict[str, tk.BooleanVar] = {}
         self.window_rows: dict[str, dict] = {}
+        self.last_typed_terminals: list[str] = []
         self._send_in_progress = False
         self._escape_listener = None
 
@@ -44,6 +45,13 @@ class MultiSendGUI(tk.Tk):
 
         send_btn = ttk.Button(top, text="Send", command=self.send_message)
         send_btn.pack(side=tk.LEFT, padx=(8, 0))
+        self.terminal_enter_btn = ttk.Button(
+            top,
+            text="Terminal Enter (last send)",
+            command=self.terminal_enter_last_send,
+            state=tk.DISABLED,
+        )
+        self.terminal_enter_btn.pack(side=tk.LEFT, padx=(8, 0))
 
         middle = ttk.Frame(self, padding=(10, 6, 10, 6))
         middle.pack(fill=tk.BOTH, expand=True)
@@ -234,6 +242,12 @@ class MultiSendGUI(tk.Tk):
         self.send_message()
         return "break"
 
+    def _refresh_terminal_enter_button(self) -> None:
+        if self.last_typed_terminals and not self._send_in_progress:
+            self.terminal_enter_btn.configure(state=tk.NORMAL)
+            return
+        self.terminal_enter_btn.configure(state=tk.DISABLED)
+
     def send_message(self) -> None:
         if self._send_in_progress:
             self._set_status("Send already in progress. Press Escape to cancel.")
@@ -250,8 +264,25 @@ class MultiSendGUI(tk.Tk):
             return
 
         self._send_in_progress = True
+        self._refresh_terminal_enter_button()
         self._set_status(f"Sending to {len(window_ids)} window(s)... Press Escape to cancel.")
         threading.Thread(target=self._send_worker, args=(msg, window_ids), daemon=True).start()
+
+    def terminal_enter_last_send(self) -> None:
+        if self._send_in_progress:
+            self._set_status("Send already in progress. Press Escape to cancel.")
+            return
+        if not self.last_typed_terminals:
+            self._set_status("No terminal windows from last send.")
+            return
+        self._send_in_progress = True
+        self._refresh_terminal_enter_button()
+        self._set_status(
+            f"Pressing Enter in {len(self.last_typed_terminals)} terminal window(s)... Press Escape to cancel."
+        )
+        threading.Thread(
+            target=self._terminal_enter_worker, args=(list(self.last_typed_terminals),), daemon=True
+        ).start()
 
     def _send_worker(self, msg: str, window_ids: list[str]) -> None:
         try:
@@ -262,8 +293,18 @@ class MultiSendGUI(tk.Tk):
         except Exception as exc:
             self.after(0, lambda exc=exc: self._on_send_complete(result=None, error=exc))
 
+    def _terminal_enter_worker(self, window_ids: list[str]) -> None:
+        try:
+            result = core.terminal_enter_last_send(window_ids)
+            self.after(0, lambda: self._on_terminal_enter_complete(result=result, error=None))
+        except core.ToolMissingError as exc:
+            self.after(0, lambda exc=exc: self._on_terminal_enter_complete(result=None, error=exc))
+        except Exception as exc:
+            self.after(0, lambda exc=exc: self._on_terminal_enter_complete(result=None, error=exc))
+
     def _on_send_complete(self, result: dict | None, error: Exception | None) -> None:
         self._send_in_progress = False
+        self._refresh_terminal_enter_button()
         if isinstance(error, core.ToolMissingError):
             self._set_status(str(error))
             return
@@ -278,6 +319,8 @@ class MultiSendGUI(tk.Tk):
         if core.cancel_requested:
             self._set_status("Send cancelled")
             return
+        self.last_typed_terminals = list(result.get("typed_terminals", []))
+        self._refresh_terminal_enter_button()
         parts = [f"Sent to {sent_count} window(s)."]
         if result["warnings"]:
             parts.append("Warnings: " + " | ".join(result["warnings"]))
@@ -286,6 +329,29 @@ class MultiSendGUI(tk.Tk):
         self._set_status(" ".join(parts))
         self.message_var.set("")
         self.entry.focus_set()
+
+    def _on_terminal_enter_complete(self, result: dict | None, error: Exception | None) -> None:
+        self._send_in_progress = False
+        self._refresh_terminal_enter_button()
+        if isinstance(error, core.ToolMissingError):
+            self._set_status(str(error))
+            return
+        if error is not None:
+            self._set_status(f"Terminal Enter failed: {error}")
+            return
+        if result is None:
+            self._set_status("Terminal Enter failed: no result")
+            return
+        if core.cancel_requested:
+            self._set_status("Terminal Enter cancelled")
+            return
+        sent_count = len(result["sent"])
+        parts = [f"Pressed Enter in {sent_count} terminal window(s)."]
+        if result["warnings"]:
+            parts.append("Warnings: " + " | ".join(result["warnings"]))
+        if result["errors"]:
+            parts.append("Errors: " + " | ".join(result["errors"]))
+        self._set_status(" ".join(parts))
 
 
 def main() -> int:

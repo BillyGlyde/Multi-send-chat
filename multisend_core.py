@@ -343,6 +343,7 @@ def send_to_windows(
     Returns:
       {
         "sent": [window_dict...],
+        "typed_terminals": [id_hex...],
         "warnings": [str...],
         "errors": [str...]
       }
@@ -383,6 +384,7 @@ def send_to_windows(
         ensure_tools(["xclip"])
 
     sent: list[dict[str, Any]] = []
+    typed_terminals: list[str] = []
     original_focus: int | None = None
     try:
         try:
@@ -421,6 +423,8 @@ def send_to_windows(
             if cancel_requested:
                 break
             _type_text(message, int(rule.get("type_delay", TYPE_DELAY)))
+            if is_terminal_wm_class(window.get("wm_class")):
+                typed_terminals.append(str(window["id_hex"]))
             time.sleep(float(rule.get("between_steps", BETWEEN_STEPS)))
             send_key = rule.get("send_key", "Return")
             if cancel_requested:
@@ -429,6 +433,84 @@ def send_to_windows(
             if rule.get("press_send_key", True) and send_key:
                 _press_key(str(send_key))
             time.sleep(float(rule.get("post_send_delay", POST_SEND_DELAY_DEFAULT)))
+            sent.append(window)
+    finally:
+        if original_focus is not None:
+            subprocess.run(
+                ["xdotool", "windowactivate", "--sync", str(original_focus)],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+    return {"sent": sent, "typed_terminals": typed_terminals, "warnings": warnings, "errors": errors}
+
+
+def terminal_enter_last_send(window_ids: list[int | str]) -> dict[str, Any]:
+    """
+    Press Return once in each terminal window id from a previous send.
+
+    Returns:
+      {
+        "sent": [window_dict...],
+        "warnings": [str...],
+        "errors": [str...]
+      }
+    """
+    reset_cancel()
+    ensure_tools(["wmctrl", "xdotool"])
+
+    all_windows = list_windows()
+    by_hex = {w["id_hex"]: w for w in all_windows}
+
+    normalized_ids: list[str] = []
+    for raw in window_ids:
+        try:
+            normalized_ids.append(_to_hex_id(raw))
+        except ValueError:
+            continue
+
+    sent: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    errors: list[str] = []
+    original_focus: int | None = None
+    try:
+        try:
+            original_focus = _get_focused_window()
+        except Exception:
+            original_focus = None
+
+        for hex_id in normalized_ids:
+            if cancel_requested:
+                break
+
+            window = by_hex.get(hex_id)
+            if not window:
+                warnings.append(f"Window disappeared or not found: {hex_id}")
+                continue
+            if not is_terminal_wm_class(window.get("wm_class")):
+                continue
+
+            intended = int(window["id_dec"])
+            try:
+                _activate_window(intended)
+            except subprocess.CalledProcessError:
+                errors.append(f"Failed to activate window {window['id_hex']}: {window['title']}")
+                continue
+
+            time.sleep(FOCUS_DELAY_DEFAULT)
+
+            try:
+                focused = _get_focused_window()
+            except Exception:
+                focused = -1
+            if focused != intended:
+                errors.append(f"Focus mismatch for {window['title']} ({window['id_hex']})")
+                continue
+
+            if cancel_requested:
+                break
+            _press_key("Return")
             sent.append(window)
     finally:
         if original_focus is not None:
