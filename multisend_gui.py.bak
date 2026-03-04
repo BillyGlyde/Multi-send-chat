@@ -1,0 +1,206 @@
+#!/usr/bin/env python3
+# Run:
+#   python3 multisend_gui.py
+
+from __future__ import annotations
+
+import tkinter as tk
+from tkinter import ttk
+
+import multisend_core as core
+
+
+class MultiSendGUI(tk.Tk):
+    def __init__(self) -> None:
+        super().__init__()
+        self.title("Brave PWA MultiSend")
+        self.geometry("780x520")
+        self.minsize(640, 420)
+
+        self.message_var = tk.StringVar()
+        self.status_var = tk.StringVar(value="Ready.")
+        self.window_vars: dict[str, tk.BooleanVar] = {}
+        self.window_rows: dict[str, dict] = {}
+
+        self.ruleset = core.default_ruleset()
+
+        self._build_ui()
+        self._check_tools()
+        self.refresh_windows()
+
+    def _build_ui(self) -> None:
+        top = ttk.Frame(self, padding=(10, 10, 10, 6))
+        top.pack(fill=tk.X)
+
+        self.entry = ttk.Entry(top, textvariable=self.message_var)
+        self.entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.entry.bind("<Return>", self.on_send_enter)
+
+        send_btn = ttk.Button(top, text="Send", command=self.send_message)
+        send_btn.pack(side=tk.LEFT, padx=(8, 0))
+
+        middle = ttk.Frame(self, padding=(10, 6, 10, 6))
+        middle.pack(fill=tk.BOTH, expand=True)
+
+        self.canvas = tk.Canvas(middle, borderwidth=0, highlightthickness=0)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        scrollbar = ttk.Scrollbar(middle, orient=tk.VERTICAL, command=self.canvas.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.canvas.configure(yscrollcommand=scrollbar.set)
+
+        self.window_list_frame = ttk.Frame(self.canvas)
+        self.canvas_window = self.canvas.create_window(
+            (0, 0), window=self.window_list_frame, anchor="nw"
+        )
+
+        self.window_list_frame.bind("<Configure>", self._on_frame_configure)
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
+
+        bottom = ttk.Frame(self, padding=(10, 6, 10, 10))
+        bottom.pack(fill=tk.X)
+
+        refresh_btn = ttk.Button(bottom, text="Refresh windows", command=self.refresh_windows)
+        refresh_btn.pack(side=tk.LEFT)
+
+        status_label = ttk.Label(
+            bottom,
+            textvariable=self.status_var,
+            anchor=tk.W,
+            justify=tk.LEFT,
+            wraplength=560,
+        )
+        status_label.pack(side=tk.LEFT, padx=(12, 0), fill=tk.X, expand=True)
+
+    def _on_frame_configure(self, _event: tk.Event) -> None:
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def _on_canvas_configure(self, event: tk.Event) -> None:
+        self.canvas.itemconfigure(self.canvas_window, width=event.width)
+
+    def _set_status(self, text: str) -> None:
+        self.status_var.set(text)
+
+    def _check_tools(self) -> None:
+        missing = core.missing_tools(["wmctrl", "xdotool", "xclip"])
+        if missing:
+            self._set_status(f"Missing tool(s): {', '.join(missing)}")
+
+    def _display_name_map(self, windows: list[dict]) -> dict[str, str]:
+        counts: dict[str, int] = {}
+        for w in windows:
+            title = (w["title"] or "").strip() or "(untitled)"
+            counts[title] = counts.get(title, 0) + 1
+
+        display: dict[str, str] = {}
+        for w in windows:
+            title = (w["title"] or "").strip() or "(untitled)"
+            label = title
+            if counts.get(title, 0) > 1:
+                label = f"{title} [{w['id_hex']}]"
+            display[w["id_hex"]] = label
+        return display
+
+    def refresh_windows(self) -> None:
+        previous_checked = {wid for wid, var in self.window_vars.items() if var.get()}
+        self.window_vars = {}
+        self.window_rows = {}
+
+        for child in self.window_list_frame.winfo_children():
+            child.destroy()
+
+        try:
+            windows = core.list_brave_pwa_windows()
+        except core.ToolMissingError as exc:
+            self._set_status(str(exc))
+            return
+        except Exception as exc:
+            self._set_status(f"Failed to load windows: {exc}")
+            return
+
+        if not windows:
+            ttk.Label(self.window_list_frame, text="No Brave PWA windows found.").pack(
+                anchor=tk.W, pady=4
+            )
+            self._set_status("No Brave PWA windows found. Open apps, then refresh.")
+            return
+
+        display_names = self._display_name_map(windows)
+        for idx, win in enumerate(windows):
+            wid = win["id_hex"]
+            var = tk.BooleanVar(value=(wid in previous_checked))
+            self.window_vars[wid] = var
+
+            row = ttk.Frame(self.window_list_frame, padding=(2, 2))
+            row.grid(row=idx, column=0, sticky="ew")
+            row.columnconfigure(0, weight=1)
+
+            cb = ttk.Checkbutton(row, text=display_names[wid], variable=var)
+            cb.grid(row=0, column=0, sticky="w")
+
+            hint = self._window_rule_hint(win["title"])
+            detail = ttk.Label(
+                row,
+                text=f"{win['wm_class']}  |  {hint}",
+                foreground="#666666",
+            )
+            detail.grid(row=1, column=0, sticky="w", padx=(24, 0))
+
+            self.window_rows[wid] = win
+
+        self._set_status(f"Loaded {len(windows)} Brave PWA window(s).")
+
+    def _window_rule_hint(self, title: str) -> str:
+        t = (title or "").lower()
+        if "perplexity" in t:
+            return "send: Ctrl+Return, focus probe enabled"
+        if "claude" in t:
+            return "send: Ctrl+Return, longer delays"
+        if "chatgpt" in t:
+            return "send: Return"
+        return "send: Return (default)"
+
+    def on_send_enter(self, _event: tk.Event) -> str:
+        self.send_message()
+        return "break"
+
+    def send_message(self) -> None:
+        msg = self.message_var.get().strip()
+        if not msg:
+            self._set_status("Type a message first.")
+            return
+
+        window_ids = [wid for wid, var in self.window_vars.items() if var.get()]
+        if not window_ids:
+            self._set_status("Select at least one window.")
+            return
+
+        try:
+            result = core.send_to_windows(msg, window_ids, self.ruleset)
+        except core.ToolMissingError as exc:
+            self._set_status(str(exc))
+            return
+        except Exception as exc:
+            self._set_status(f"Send failed: {exc}")
+            return
+
+        sent_count = len(result["sent"])
+        parts = [f"Sent to {sent_count} window(s)."]
+        if result["warnings"]:
+            parts.append("Warnings: " + " | ".join(result["warnings"]))
+        if result["errors"]:
+            parts.append("Errors: " + " | ".join(result["errors"]))
+        self._set_status(" ".join(parts))
+        self.message_var.set("")
+        self.entry.focus_set()
+
+
+def main() -> int:
+    app = MultiSendGUI()
+    app.mainloop()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
