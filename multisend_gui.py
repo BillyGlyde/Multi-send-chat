@@ -18,6 +18,58 @@ class MultiSendGUI(tk.Tk):
         self.title("Brave PWA MultiSend")
         self.geometry("780x520")
         self.minsize(640, 420)
+        self.configure(bg="#000000")
+
+        self.style = ttk.Style(self)
+        self.style.theme_use("clam")
+        self.style.configure("Cyber.TFrame", background="#050505")
+        self.style.configure(
+            "Cyber.TLabel",
+            background="#000000",
+            foreground="#00FFFF",
+            font=("Courier", 11),
+        )
+        self.style.configure(
+            "Cyber.TButton",
+            background="#111111",
+            foreground="#00FFFF",
+            borderwidth=0,
+            font=("Courier", 11),
+        )
+        self.style.map(
+            "Cyber.TButton",
+            background=[("active", "#00FF9F"), ("pressed", "#00FF9F"), ("disabled", "#111111")],
+            foreground=[("active", "#000000"), ("pressed", "#000000"), ("disabled", "#444444")],
+        )
+        self.style.configure(
+            "Cyber.TEntry",
+            fieldbackground="#050505",
+            foreground="#00FFFF",
+            font=("Courier", 11),
+        )
+        self.style.configure(
+            "Cyber.TCheckbutton",
+            background="#050505",
+            foreground="#00FFFF",
+            font=("Courier", 11),
+        )
+        self.style.map(
+            "Cyber.TCheckbutton",
+            background=[("active", "#050505"), ("selected", "#050505")],
+            foreground=[("active", "#00FFFF"), ("selected", "#00FFFF")],
+        )
+        self.style.configure(
+            "Cyber.Vertical.TScrollbar",
+            background="#111111",
+            troughcolor="#050505",
+            bordercolor="#050505",
+            arrowcolor="#00FFFF",
+            darkcolor="#111111",
+            lightcolor="#111111",
+        )
+        self._ui_images: dict[str, tk.PhotoImage] = {}
+        self._ui_images["button_main"] = tk.PhotoImage(file="/home/sb/Thumbs_Up/assets/ui/button_main.png")
+        self._ui_images["button_main_scaled"] = self._ui_images["button_main"].zoom(5, 3).subsample(2, 4)
 
         self.message_var = tk.StringVar()
         self.status_var = tk.StringVar(value="Ready.")
@@ -35,35 +87,88 @@ class MultiSendGUI(tk.Tk):
         self.refresh_windows()
 
     def _build_ui(self) -> None:
-        top = ttk.Frame(self, padding=(10, 10, 10, 6))
+        top = ttk.Frame(self, padding=(10, 10, 10, 6), style="Cyber.TFrame")
         top.pack(fill=tk.X)
 
-        self.entry = ttk.Entry(top, textvariable=self.message_var)
+        self.entry = tk.Entry(
+            top,
+            textvariable=self.message_var,
+            bg="#050505",
+            fg="#00FFFF",
+            insertbackground="#00FFFF",
+            font=("Courier", 11),
+            borderwidth=0,
+            relief=tk.FLAT,
+        )
         self.entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
         self.entry.bind("<Return>", self.on_send_enter)
         self.bind("<Escape>", lambda _event: core.request_cancel())
 
-        send_btn = ttk.Button(top, text="Send", command=self.send_message)
+        send_btn = tk.Button(
+            top,
+            text="Send",
+            command=self.send_message,
+            image=self._ui_images["button_main_scaled"],
+            compound="center",
+            borderwidth=0,
+            highlightthickness=0,
+            relief="flat",
+            font=("Courier", 12, "bold"),
+            padx=10,
+            pady=6,
+            width=160,
+            height=50,
+            fg="#000000",
+            bg="#000000",
+            activebackground="#000000",
+            activeforeground="#000000",
+            disabledforeground="#000000",
+        )
         send_btn.pack(side=tk.LEFT, padx=(8, 0))
-        self.terminal_enter_btn = ttk.Button(
+        self.terminal_enter_btn = tk.Button(
             top,
             text="Terminal Enter (last send)",
             command=self.terminal_enter_last_send,
             state=tk.DISABLED,
+            image=self._ui_images["button_main_scaled"],
+            compound="center",
+            borderwidth=0,
+            highlightthickness=0,
+            relief="flat",
+            font=("Courier", 12, "bold"),
+            padx=10,
+            pady=6,
+            width=160,
+            height=50,
+            fg="#000000",
+            bg="#000000",
+            activebackground="#000000",
+            activeforeground="#000000",
+            disabledforeground="#000000",
         )
         self.terminal_enter_btn.pack(side=tk.LEFT, padx=(8, 0))
 
-        middle = ttk.Frame(self, padding=(10, 6, 10, 6))
+        middle = ttk.Frame(self, padding=(10, 6, 10, 6), style="Cyber.TFrame")
         middle.pack(fill=tk.BOTH, expand=True)
 
-        self.canvas = tk.Canvas(middle, borderwidth=0, highlightthickness=0)
+        self.canvas = tk.Canvas(
+            middle,
+            borderwidth=0,
+            highlightthickness=0,
+            bg="#050505",
+        )
         self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        scrollbar = ttk.Scrollbar(middle, orient=tk.VERTICAL, command=self.canvas.yview)
+        scrollbar = ttk.Scrollbar(
+            middle,
+            orient=tk.VERTICAL,
+            command=self.canvas.yview,
+            style="Cyber.Vertical.TScrollbar",
+        )
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.canvas.configure(yscrollcommand=scrollbar.set)
 
-        self.window_list_frame = ttk.Frame(self.canvas)
+        self.window_list_frame = ttk.Frame(self.canvas, style="Cyber.TFrame")
         self.canvas_window = self.canvas.create_window(
             (0, 0), window=self.window_list_frame, anchor="nw"
         )
@@ -78,10 +183,15 @@ class MultiSendGUI(tk.Tk):
         self.window_list_frame.bind("<Configure>", self._on_frame_configure)
         self.canvas.bind("<Configure>", self._on_canvas_configure)
 
-        bottom = ttk.Frame(self, padding=(10, 6, 10, 10))
+        bottom = ttk.Frame(self, padding=(10, 6, 10, 10), style="Cyber.TFrame")
         bottom.pack(fill=tk.X)
 
-        refresh_btn = ttk.Button(bottom, text="Refresh windows", command=self.refresh_windows)
+        refresh_btn = ttk.Button(
+            bottom,
+            text="Refresh windows",
+            command=self.refresh_windows,
+            style="Cyber.TButton",
+        )
         refresh_btn.pack(side=tk.LEFT)
 
         status_label = ttk.Label(
@@ -90,6 +200,7 @@ class MultiSendGUI(tk.Tk):
             anchor=tk.W,
             justify=tk.LEFT,
             wraplength=560,
+            style="Cyber.TLabel",
         )
         status_label.pack(side=tk.LEFT, padx=(12, 0), fill=tk.X, expand=True)
 
@@ -193,7 +304,7 @@ class MultiSendGUI(tk.Tk):
             return
 
         if not windows:
-            ttk.Label(self.window_list_frame, text="No supported windows found.").pack(
+            ttk.Label(self.window_list_frame, text="No supported windows found.", style="Cyber.TLabel").pack(
                 anchor=tk.W, pady=4
             )
             self._set_status("No supported windows found. Open chat/terminal/editor windows, then refresh.")
@@ -205,18 +316,21 @@ class MultiSendGUI(tk.Tk):
             var = tk.BooleanVar(value=(wid in previous_checked))
             self.window_vars[wid] = var
 
-            row = ttk.Frame(self.window_list_frame, padding=(2, 2))
+            row = ttk.Frame(self.window_list_frame, padding=(2, 2), style="Cyber.TFrame")
             row.grid(row=idx, column=0, sticky="ew")
             row.columnconfigure(0, weight=1)
 
-            cb = ttk.Checkbutton(row, text=display_names[wid], variable=var)
+            cb = ttk.Checkbutton(row, text=display_names[wid], variable=var, style="Cyber.TCheckbutton")
             cb.grid(row=0, column=0, sticky="w")
 
             hint = self._window_rule_hint(win)
             detail = ttk.Label(
                 row,
                 text=f"{win['wm_class']}  |  {hint}",
-                foreground="#666666",
+                foreground="#00FFFF",
+                font=("Courier", 11),
+                background="#000000",
+                style="Cyber.TLabel",
             )
             detail.grid(row=1, column=0, sticky="w", padx=(24, 0))
 
