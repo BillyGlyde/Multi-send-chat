@@ -170,13 +170,6 @@ def default_ruleset() -> dict[str, Any]:
         },
         "title_contains": [
             {
-                "pattern": "perplexity",
-                "config": {
-                    "send_key": "ctrl+Return",
-                    "use_perplexity_probe": True,
-                },
-            },
-            {
                 "pattern": "claude",
                 "config": {
                     "send_key": "ctrl+Return",
@@ -192,7 +185,12 @@ def default_ruleset() -> dict[str, Any]:
             },
         ],
         "by_window_id": {},
-        "by_wm_class": {},
+        "by_wm_class": {
+            "crx_pdblnecalpedecgehiadglkhjcbjcfgj.Brave-browser": {
+                "send_key": "ctrl+Return",
+                "use_perplexity_probe": True,
+            },
+        },
     }
 
 
@@ -377,6 +375,9 @@ def send_to_windows(
             warnings.append(f"Window disappeared or not found: {hex_id}")
             continue
         selected_windows.append(w)
+    selected_windows.sort(
+        key=lambda w: "crx_pdblnecalpedecgehiadglkhjcbjcfgj" not in (w.get("wm_class") or "")
+    )
 
     if any(_resolve_rule(w, rules).get("use_perplexity_probe") for w in selected_windows):
         ensure_tools(["xclip"])
@@ -412,7 +413,10 @@ def send_to_windows(
                 continue
 
             if rule.get("use_perplexity_probe"):
-                _perplexity_focus_if_needed(rule)
+                ok = _perplexity_focus_if_needed(rule)
+                if not ok:
+                    errors.append(f"Perplexity focus/probe failed for {window['title']} ({window['id_hex']})")
+                    continue
 
             if cancel_requested:
                 break
